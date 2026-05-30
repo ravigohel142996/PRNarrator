@@ -26,7 +26,7 @@ PRNarrator/
   - `diff` (required)
   - `pr_title` (optional)
   - `pr_description` (optional)
-- Claude-powered output fields:
+- Groq-powered output fields:
   - `one_liner`
   - `stakeholder_summary`
   - `sprint_bullets`
@@ -47,9 +47,7 @@ pip install -r backend/requirements.txt
 3. Set environment variables:
 
 ```bash
-export ANTHROPIC_API_KEY="your_api_key"
-# Optional
-export ANTHROPIC_MODEL="claude-3-5-sonnet-latest"
+export GROQ_API_KEY="your_api_key"
 ```
 
 4. Start backend:
@@ -111,6 +109,6 @@ Response body:
 
 ## Notes
 
-- The backend expects Claude to return strict JSON.
-- If `ANTHROPIC_API_KEY` is missing, the API returns an error.
+- The backend expects Groq to return strict JSON.
+- If `GROQ_API_KEY` is missing, the API returns an error.
 - CORS is enabled for local frontend/backend development.
