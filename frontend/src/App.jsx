@@ -1,6 +1,14 @@
 import { useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const SYSTEM_PROMPT = `You are PRNarrator. Analyze the PR diff and return ONLY valid JSON with no markdown no backticks:
+{
+  one_liner: one sentence max 15 words for Slack,
+  stakeholder_summary: 2-3 sentences for non-technical people,
+  sprint_bullets: array of 3 bullet strings,
+  risk_flags: array of risk strings or empty array,
+  technical_summary: 2-3 sentences for developers
+}`
 
 const outputLabels = {
   one_liner: 'One-liner',
@@ -29,23 +37,50 @@ function App() {
 
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/narrate`, {
+      const apiKey = import.meta.env.VITE_GROQ_API_KEY
+      if (!apiKey) {
+        throw new Error('Missing VITE_GROQ_API_KEY')
+      }
+
+      const response = await fetch(GROQ_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + apiKey,
+        },
         body: JSON.stringify({
-          pr_title: prTitle,
-          pr_description: prDescription,
-          diff,
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: `PR Title: ${prTitle}\nPR Description: ${prDescription || 'N/A'}\nPR Diff:\n${diff}`,
+            },
+          ],
         }),
       })
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.detail || 'Narration failed')
+        throw new Error(data.error?.message || 'Narration failed')
       }
 
       const data = await response.json()
-      setResult(data)
+      const content = data?.choices?.[0]?.message?.content
+      if (!content) {
+        throw new Error('Invalid response from Groq API')
+      }
+
+      const parsed = JSON.parse(content)
+      setResult({
+        one_liner: parsed.one_liner || '',
+        stakeholder_summary: parsed.stakeholder_summary || '',
+        sprint_bullets: Array.isArray(parsed.sprint_bullets) ? parsed.sprint_bullets : [],
+        risk_flags: Array.isArray(parsed.risk_flags) ? parsed.risk_flags : [],
+        technical_summary: parsed.technical_summary || '',
+      })
     } catch (e) {
       setError(e.message)
     } finally {

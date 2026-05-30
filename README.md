@@ -1,14 +1,11 @@
 # PRNarrator
 
-PRNarrator is a full-stack web app that transforms raw pull request diffs into concise narratives for engineering and non-engineering stakeholders.
+PRNarrator is a frontend-only web app that transforms raw pull request diffs into concise narratives for engineering and non-engineering stakeholders using the Groq API directly from the browser.
 
 ## Project structure
 
 ```
 PRNarrator/
-├── backend/
-│   ├── main.py
-│   └── requirements.txt
 └── frontend/
     ├── index.html
     ├── package.json
@@ -21,40 +18,16 @@ PRNarrator/
 
 ## Features
 
-- FastAPI backend with CORS support
-- `POST /narrate` endpoint that accepts:
-  - `diff` (required)
-  - `pr_title` (optional)
-  - `pr_description` (optional)
-- Groq-powered output fields:
+- Frontend-only React + Vite app
+- Direct Groq API integration from the browser
+- Uses model `llama-3.3-70b-versatile`
+- Generates:
   - `one_liner`
   - `stakeholder_summary`
   - `sprint_bullets`
   - `risk_flags`
   - `technical_summary`
-- React + Vite frontend using a GitHub-dark-style UI (`#0d1117`)
 - Copy buttons for each generated output section
-
-## Backend setup
-
-1. Create and activate a virtual environment.
-2. Install dependencies:
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-3. Set environment variables:
-
-```bash
-export GROQ_API_KEY="your_api_key"
-```
-
-4. Start backend:
-
-```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
 
 ## Frontend setup
 
@@ -65,10 +38,16 @@ cd frontend
 npm install
 ```
 
-2. (Optional) Override backend URL:
+2. Configure environment variable:
 
 ```bash
-export VITE_API_BASE="http://localhost:8000"
+cp .env.example .env
+```
+
+Then update `.env`:
+
+```bash
+VITE_GROQ_API_KEY=your_groq_api_key_here
 ```
 
 3. Start frontend dev server:
@@ -77,38 +56,9 @@ export VITE_API_BASE="http://localhost:8000"
 npm run dev
 ```
 
-## API contract
+## Build
 
-### `POST /narrate`
-
-Request body:
-
-```json
-{
-  "diff": "<git diff text>"
-}
+```bash
+cd frontend
+npm run build
 ```
-
-Response body:
-
-```json
-{
-  "one_liner": "Adds OAuth callback handling and user session initialization.",
-  "stakeholder_summary": "This update improves sign-in reliability by finalizing GitHub OAuth login.",
-  "sprint_bullets": [
-    "Added backend OAuth callback endpoint",
-    "Persisted authenticated session",
-    "Updated login flow tests"
-  ],
-  "risk_flags": [
-    "OAuth provider outages can affect login availability"
-  ],
-  "technical_summary": "Introduces callback processing, token exchange, and guarded session creation."
-}
-```
-
-## Notes
-
-- The backend expects Groq to return strict JSON.
-- If `GROQ_API_KEY` is missing, the API returns an error.
-- CORS is enabled for local frontend/backend development.
