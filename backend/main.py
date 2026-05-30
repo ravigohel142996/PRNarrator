@@ -23,7 +23,7 @@ app.add_middleware(
 
 class NarrateRequest(BaseModel):
     diff: str = Field(..., min_length=1)
-    pr_title: str = Field(..., min_length=1)
+    pr_title: str = Field(default="")
     pr_description: str = Field(default="")
 
 
@@ -36,13 +36,16 @@ class NarrateResponse(BaseModel):
 
 
 def _build_prompt(payload: NarrateRequest) -> str:
+    pr_title = payload.pr_title.strip() or "(not provided)"
+    pr_description = payload.pr_description.strip() or "(not provided)"
+
     return (
         "You are PRNarrator. Convert the provided pull request data into concise, accurate summaries. "
         "Return STRICT JSON only with keys: one_liner (string), stakeholder_summary (string), "
         "sprint_bullets (array of short strings), risk_flags (array of short strings), "
         "technical_summary (string).\\n\\n"
-        f"PR Title:\\n{payload.pr_title}\\n\\n"
-        f"PR Description:\\n{payload.pr_description}\\n\\n"
+        f"PR Title:\\n{pr_title}\\n\\n"
+        f"PR Description:\\n{pr_description}\\n\\n"
         f"Diff:\\n{payload.diff}"
     )
 
