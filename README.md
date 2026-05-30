@@ -23,9 +23,9 @@ PRNarrator/
 
 - FastAPI backend with CORS support
 - `POST /narrate` endpoint that accepts:
-  - `diff`
-  - `pr_title`
-  - `pr_description`
+  - `diff` (required)
+  - `pr_title` (optional)
+  - `pr_description` (optional)
 - Claude-powered output fields:
   - `one_liner`
   - `stakeholder_summary`
@@ -87,9 +87,7 @@ Request body:
 
 ```json
 {
-  "diff": "<git diff text>",
-  "pr_title": "Add GitHub OAuth callback support",
-  "pr_description": "Implements callback route and session handling"
+  "diff": "<git diff text>"
 }
 ```
 
