@@ -2,13 +2,14 @@ import json
 import os
 from typing import List
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
 from pydantic import BaseModel, Field
 
 load_dotenv()
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 app = FastAPI(title="PRNarrator API", version="1.0.0")
 
@@ -52,33 +53,30 @@ def _build_prompt(payload: NarrateRequest) -> str:
 
 @app.post("/narrate", response_model=NarrateResponse)
 def narrate(payload: NarrateRequest) -> NarrateResponse:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not configured")
-
-    model = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
-    client = Anthropic(api_key=api_key)
+    if not os.getenv("GROQ_API_KEY"):
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY is not configured")
 
     try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=1200,
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             temperature=0.2,
-            system=(
-                "Always produce accurate PR summaries and respond with JSON only. "
-                "Do not include markdown fences."
-            ),
-            messages=[{"role": "user", "content": _build_prompt(payload)}],
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Always produce accurate PR summaries and respond with JSON only. "
+                        "Do not include markdown fences."
+                    ),
+                },
+                {"role": "user", "content": _build_prompt(payload)},
+            ],
         )
-
-        text_chunks = [
-            block.text for block in response.content if getattr(block, "type", None) == "text"
-        ]
-        raw_text = "".join(text_chunks).strip()
+        raw_text = (response.choices[0].message.content or "").strip()
         parsed = json.loads(raw_text)
 
         return NarrateResponse(**parsed)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="Invalid JSON returned by Claude") from exc
+        raise HTTPException(status_code=502, detail="Invalid JSON returned by Groq model") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Narration failed: {str(exc)}") from exc
