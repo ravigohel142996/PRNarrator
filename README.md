@@ -65,10 +65,11 @@ cd frontend
 npm install
 ```
 
-2. (Optional) Override backend URL:
+2. Configure frontend environment variables:
 
 ```bash
-export VITE_API_BASE="http://localhost:8000"
+export VITE_GEMINI_API_KEY="your_api_key"
+export VITE_GEMINI_MODEL="gemini-2.0-flash"
 ```
 
 3. Start frontend dev server:

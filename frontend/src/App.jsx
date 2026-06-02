@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+const CONFIGURED_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-2.0-flash'
+const modelCandidates = Array.from(
+  new Set([CONFIGURED_MODEL, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(Boolean)),
+)
 const outputFields = [
   ['one_liner', 'One-liner'],
   ['stakeholder_summary', 'Stakeholder Summary'],
@@ -8,6 +12,16 @@ const outputFields = [
   ['risk_flags', 'Risk Flags'],
   ['technical_summary', 'Technical Summary'],
 ]
+
+const getGeminiErrorMessage = (rawError, status) => {
+  if (!rawError) return `Gemini request failed with status ${status}.`
+  try {
+    const parsed = JSON.parse(rawError)
+    return parsed?.error?.message || rawError
+  } catch {
+    return rawError
+  }
+}
 
 function App() {
   const [prTitle, setPrTitle] = useState('')
@@ -41,25 +55,43 @@ PR Diff: ${prDiff}`
 
     try {
       setLoading(true)
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        },
-      )
+      let text = ''
+      let lastError = ''
 
-      if (!response.ok) {
+      for (const model of modelCandidates) {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+            }),
+          },
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+          break
+        }
+
         const rawError = await response.text().catch(() => '')
-        throw new Error(rawError || 'Gemini request failed.')
+        const errorMessage = getGeminiErrorMessage(rawError, response.status)
+        const modelUnavailable =
+          response.status === 404 && /not found|not supported for generateContent/i.test(errorMessage)
+
+        if (modelUnavailable) {
+          lastError = `Model "${model}" is unavailable.`
+          continue
+        }
+
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-      if (!text) throw new Error('Gemini returned an empty response.')
+      if (!text) {
+        throw new Error(lastError || 'No compatible Gemini model is currently available for generateContent.')
+      }
 
       const parsed = JSON.parse(text)
       setResult(parsed)
