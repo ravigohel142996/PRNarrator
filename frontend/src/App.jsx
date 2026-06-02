@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 const CONFIGURED_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-2.0-flash'
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL?.trim() || 'meta-llama/llama-3.1-8b-instruct:free'
 const modelCandidates = Array.from(
   new Set([CONFIGURED_MODEL, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(Boolean)),
 )
@@ -13,14 +15,85 @@ const outputFields = [
   ['technical_summary', 'Technical Summary'],
 ]
 
-const getGeminiErrorMessage = (rawError, status) => {
-  if (!rawError) return `Gemini request failed with status ${status}.`
+const getApiErrorMessage = (rawError, status, provider) => {
+  if (!rawError) return `${provider} request failed with status ${status}.`
   try {
     const parsed = JSON.parse(rawError)
-    return parsed?.error?.message || rawError
+    return parsed?.error?.message || parsed?.message || rawError
   } catch {
     return rawError
   }
+}
+
+const cleanJsonResponse = (text) => {
+  if (!text) return ''
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+}
+
+const callGemini = async (prompt) => {
+  let text = ''
+  let lastError = ''
+
+  for (const model of modelCandidates) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      },
+    )
+
+    if (response.ok) {
+      const data = await response.json()
+      text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      break
+    }
+
+    const rawError = await response.text().catch(() => '')
+    const errorMessage = getApiErrorMessage(rawError, response.status, 'Gemini')
+    const modelUnavailable = response.status === 404 && /not found|not supported for generateContent/i.test(errorMessage)
+
+    if (modelUnavailable) {
+      lastError = `Model "${model}" is unavailable.`
+      continue
+    }
+
+    throw new Error(errorMessage)
+  }
+
+  if (!text) {
+    throw new Error(lastError || 'No compatible Gemini model is currently available for generateContent.')
+  }
+
+  return text
+}
+
+const callOpenRouter = async (prompt) => {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + OPENROUTER_API_KEY,
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  if (!response.ok) {
+    const rawError = await response.text().catch(() => '')
+    throw new Error(getApiErrorMessage(rawError, response.status, 'OpenRouter'))
+  }
+
+  const data = await response.json()
+  const text = data?.choices?.[0]?.message?.content || ''
+  if (!text) throw new Error('OpenRouter returned an empty response.')
+  return text
 }
 
 function App() {
@@ -37,8 +110,10 @@ function App() {
     setError('')
     setResult(null)
 
-    if (!API_KEY) {
-      setError('Missing VITE_GEMINI_API_KEY. Add it to your environment before narrating.')
+    if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
+      setError(
+        'Missing API keys. Set VITE_GEMINI_API_KEY and/or VITE_OPENROUTER_API_KEY before narrating.',
+      )
       return
     }
 
@@ -55,46 +130,24 @@ PR Diff: ${prDiff}`
 
     try {
       setLoading(true)
-      let text = ''
-      let lastError = ''
+      const providers = [
+        GEMINI_API_KEY ? { label: 'Gemini', run: callGemini } : null,
+        OPENROUTER_API_KEY ? { label: 'OpenRouter', run: callOpenRouter } : null,
+      ].filter(Boolean)
+      const providerErrors = []
 
-      for (const model of modelCandidates) {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-            }),
-          },
-        )
-
-        if (response.ok) {
-          const data = await response.json()
-          text = data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
-          break
+      for (const provider of providers) {
+        try {
+          const text = await provider.run(prompt)
+          const parsed = JSON.parse(cleanJsonResponse(text))
+          setResult(parsed)
+          return
+        } catch (providerError) {
+          providerErrors.push(`${provider.label}: ${providerError?.message || 'Request failed.'}`)
         }
-
-        const rawError = await response.text().catch(() => '')
-        const errorMessage = getGeminiErrorMessage(rawError, response.status)
-        const modelUnavailable =
-          response.status === 404 && /not found|not supported for generateContent/i.test(errorMessage)
-
-        if (modelUnavailable) {
-          lastError = `Model "${model}" is unavailable.`
-          continue
-        }
-
-        throw new Error(errorMessage)
       }
 
-      if (!text) {
-        throw new Error(lastError || 'No compatible Gemini model is currently available for generateContent.')
-      }
-
-      const parsed = JSON.parse(text)
-      setResult(parsed)
+      throw new Error(providerErrors.join(' | ') || 'Failed to narrate PR.')
     } catch (e) {
       setError(e.message || 'Failed to narrate PR.')
     } finally {
@@ -134,7 +187,7 @@ PR Diff: ${prDiff}`
     >
       <div style={{ maxWidth: 980, margin: '0 auto' }}>
         <h1 style={{ margin: 0, color: '#f0f6fc' }}>PRNarrator</h1>
-        <p style={{ marginTop: '0.5rem', color: '#8b949e' }}>Generate polished PR summaries with Gemini.</p>
+        <p style={{ marginTop: '0.5rem', color: '#8b949e' }}>Generate polished PR summaries with Gemini or OpenRouter.</p>
 
         <section
           style={{

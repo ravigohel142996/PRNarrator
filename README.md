@@ -33,6 +33,7 @@ PRNarrator/
   - `risk_flags`
   - `technical_summary`
 - React + Vite frontend using a GitHub-dark-style UI (`#0d1117`)
+- Gemini-first narration with optional OpenRouter fallback when Gemini key/quota fails
 - Copy buttons for each generated output section
 
 ## Backend setup
@@ -70,6 +71,8 @@ npm install
 ```bash
 export VITE_GEMINI_API_KEY="your_api_key"
 export VITE_GEMINI_MODEL="gemini-2.0-flash"
+export VITE_OPENROUTER_API_KEY="your_api_key" # optional fallback
+export VITE_OPENROUTER_MODEL="meta-llama/llama-3.1-8b-instruct:free"
 ```
 
 3. Start frontend dev server:
