@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-const CONFIGURED_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-2.0-flash'
+const CONFIGURED_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite'
 const modelCandidates = Array.from(
-  new Set([CONFIGURED_MODEL, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(Boolean)),
+  new Set([CONFIGURED_MODEL, 'gemini-3.1-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(Boolean)),
 )
 const outputFields = [
   ['one_liner', 'One-liner'],
