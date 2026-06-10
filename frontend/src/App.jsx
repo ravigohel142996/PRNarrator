@@ -278,6 +278,7 @@ PR Diff: ${prDiff}`
           margin-top: 0.25rem;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
           line-height: 1.5;
+          tab-size: 2;
           white-space: pre;
           background-image: linear-gradient(transparent 31px, rgba(255, 255, 255, 0.03) 32px);
           background-size: 100% 32px;
